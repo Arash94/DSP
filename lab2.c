@@ -16,7 +16,7 @@ void convolve(float* Y, float *X, float* h);
 void iir(float* y, float* x);
 void sinc_filter(float* h, float wc);
 void add_signal(float* signal,float* noise,float* results);
-void noise(float* noise, float wf);
+void noise(float* noise, float c);
 
 
 int main(int argc, char *argv[])
@@ -33,6 +33,8 @@ int main(int argc, char *argv[])
 	sndInfoOut.channels = 1;
 	sndInfoOut.samplerate = Fs;
 	SNDFILE *sndFileOut = sf_open(argv[1], SFM_WRITE, &sndInfoOut);
+	SNDFILE *sndfileIn = sf_open(argv[0], SFM_WRITE, &sndInfoOut);
+
     
 	 float* h = malloc(filter_size * sizeof(float));
      float* speech = malloc(theNumOfSamples * sizeof(float));
@@ -49,30 +51,33 @@ int main(int argc, char *argv[])
 
 void add_signal(float* signal,float* noise,float* results)
 {   
-    for (float i = 0; i < theNumOfSamples; i++)
+    for (int i = 0; i < theNumOfSamples; i++)
     {
-        results[i] = signal[i] + noise[i];
+        *(results+i) = *(signal+i) + *(noise+i);
     }
 
 }
 
-void noise(float* noise, float wf)
+void noise(float* noise, float c)
 {
-    for (float i = 0; i < theNumOfSamples; i++)
+    for (int i = 0; i < theNumOfSamples; i++)
     {
-       noise[i] = sin(2*PI*wf*i);
+       *(noise+i) = sin(2*PI*wf*i);
     }   
 
 }
 void sinc_filter(float* h, float wc)
 {
 
-    h[0] = wc*/PI;
+    h[0] = wc/PI;
 
-    for (float i = 1; i < filter_size; i++)
+    for (int i = 1; i < filter_size; i++)
     {
-        h[i] = (wc*/PI*sin(wc*/PI*i))/(i*PI);
-        if (i==7){h[7] = h[7]-1.0};
+        *(h+i) = (wc/PI*sin(wc/PI*i))/(i*PI);
+        if (i==7)
+		{
+			h[7] = h[7]-1.0;
+		}
     }
    
 
@@ -80,22 +85,21 @@ void sinc_filter(float* h, float wc)
 
 void convolve(float* h, float* Y, float* X)
 {
-	for (i = 7;i < theNumOfSamples-7;i++){
-       for (j = 1; j < filter_size; j++)
+	for (int i = 7;i < theNumOfSamples-7;i++){
+       for (int j = 1; j < filter_size; j++)
 	   {
-           Y(i) = Y(i) + h(j)*X(i+j-7);
+           Y[i] = Y[i] + h[j]*X[i+j-7];
 	   }
 	}
-
 }
 
-void iir_notch(float* y, float* x)
+void iir_notch(float* y, float x, float wc)
 {
 	//wc = pi/10
     float r1 = 1;
     float r2 = 0.95;
 	float a = {1, -2*r1*cos(wc), 1} ;
-    float b = {1, -2*r2*cos(wc), r2**2};
+    float b = {1, -2*r2*cos(wc), pow(r2,2)};
 
 	y[0] = a[0] * x[0];
 	y[1] = a[0] * x[1] + a[1] * x[0] - b[1] * y[0];
