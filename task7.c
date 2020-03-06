@@ -18,12 +18,11 @@ void iir_notch(float y[], float x[], float c);
 void sinc_filter(float* h, float c);
 void add_signal(float* signal,float* noise,float* results);
 void noise(float* noise, float c);
-void echoed(float signal[],float output[]);
-void normalizeArray(float* x);
+void echoed(float signal[],float* output);
+
 
 int main(int argc, char *argv[])
 {
-	//Require 2 arguments: input file and output file
 	//Require 2 arguments: input file and output file
 	if(argc < 2)
 	{
@@ -31,6 +30,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+
+	
 
 	SF_INFO sndInfo;
 	SNDFILE *sndFile = sf_open(argv[1], SFM_READ, &sndInfo);
@@ -41,10 +42,10 @@ int main(int argc, char *argv[])
     sndInfoOut.channels = 1;
     sndInfoOut.samplerate = Fs;
     SNDFILE *sndFileOut = sf_open(argv[2], SFM_WRITE, &sndInfoOut);
+//    SNDFILE *sndFileOut = sf_open(argv[3], SFM_WRITE, &sndInfoOut);
+//    SNDFILE *sndFileOut = sf_open(argv[4], SFM_WRITE, &sndInfoOut);
 
-
-	if (sndFile == NULL)
-	{
+	if (sndFile == NULL) {
 		fprintf(stderr, "Error reading source file '%s': %s\n", argv[1], sf_strerror(sndFile));
 		return 1;
 	}
@@ -55,54 +56,38 @@ int main(int argc, char *argv[])
     float* noise_signal = malloc(theNumOfSamples * sizeof(float));
     float* noisy_speech = malloc(theNumOfSamples * sizeof(float));
     float* filtered_sinc = malloc(theNumOfSamples * sizeof(float));
-    float* filtered_iir = malloc(theNumOfSamples * sizeof(float));
+    float* filtered_iir = malloc(theNumOfSamples * sizeof(float));	
 
 
 	sf_readf_float(sndFile, speech, theNumOfSamples);
+
+	//Taske 7: Filter FIR Notch
+	noise(noise_signal, wf);
+	add_signal(speech,noise_signal, noisy_speech);
+	sinc_filter(hn, wc);
+	convolve(hn, filtered_sinc,noisy_speech);
+	sf_write_sync(sndFileOut);
+	sf_writef_float(sndFileOut, filtered_sinc, theNumOfSamples);
+    sf_write_sync(sndFileOut);
+    sf_close(sndFileOut);
     
-	//TASK 6: Add Echo
-
-	echoed(speech, echo);
-	sf_writef_float(sndFile, echo, theNumOfSamples);
-	sf_write_sync(echo);
-	free(echo);
-
-	
-	// //Taske 7: Filter FIR Notch
-	// noise(noise_signal, wf);
-	// add_signal(speech,noise_signal, noisy_speech);
-	// sinc_filter(hn, wc);
-	// convolve(hn, filtered_sinc,noisy_speech);
-	// normalizeArray(filtered_sinc);
-	// sf_writef_float(sndFile, filtered_sinc, theNumOfSamples);
-	// free(filtered_sinc);
-	//Task 8: Filter using IIR filter 
-	// iir_notch(filtered_iir, noisy_speech, wc);
-	// sf_writef_float(sndFile, filtered_iir, theNumOfSamples);
-	// normalizeArray(filtered_iir);
-	// free(filtered_iir);
-
-	// sf_close(sndFile);
-	// sf_write_sync(sndFile);
-	// sf_close(sndFile);
-
-
 	return 1;
 }
 
 
-void echoed(float signal[], float output[])
+void echoed(float signal[], float* output)
 {
 	float init= 0;
 
-	printf("Creating the echoed version of the incoming signal\n");
+	//printf("Creating the echoed version of the incoming signal\n");
 
+	
+	for (int i = 0; i < theNumOfSamples; i++){output[i] = signal[i];}
 
-	for(int i = 4000-1; i < theNumOfSamples; i++)
-	{
-		init = output[i-4000+1];
-        output[i] = 0.7*output[i] + 0.3*init;
-	}
+	for(int i = 4000-1; i < theNumOfSamples; i++){
+		init = output[i-40000+1];
+        output[i] = .7*output[i] + .3*init;
+		}
 
 }
 
@@ -123,7 +108,7 @@ void noise(float* noise, float c)
     }   
 
 }
-void sinc_filter(float h[], float c)
+void sinc_filter(float* h, float c)
 {
 
     h[0] = c/PI;
@@ -142,8 +127,7 @@ void sinc_filter(float h[], float c)
 
 void convolve(float* h, float* Y, float* X)
 {
-	for (int i = 7;i < theNumOfSamples-7;i++)
-	{
+	for (int i = 7;i < theNumOfSamples-7;i++){
        for (int j = 1; j < filter_size; j++)
 	   {
            Y[i] = Y[i] + h[j]*X[i+j-7];
@@ -161,26 +145,9 @@ void iir_notch(float y[], float x[], float c)
 
 	y[0] = a[0] * x[0];
 	y[1] = a[0] * x[1] + a[1] * x[0] - b[1] * y[0];
-	// y[2] = a[0] * x[3] + a[1] * x[2] + a[2] * y[1] - b[1] * y[1] - b[2] * y[0];
+	y[2] = a[0] * x[3] + a[1] * x[2] + a[2] * y[1] - b[1] * y[1] - b[2] * y[0];
 
-	for(int i = 2; i< theNumOfSamples; i++)
-	{
+	for(int i = 5; i< theNumOfSamples; i++){
 		y[i] = a[0] * x[i] + a[1] * x[i-1] + a[2] * x[i-2] - b[1] * y[i-1] - b[2] * y[i-2];
-	}
-}
-
-void normalizeArray(float x[])
-{
-	float maxAbsVal = 0.0;
-	for(int i = 0; i < theNumOfSamples; i++)
-	{
-		if(fabs(x[i]) > maxAbsVal)
-		{
-			maxAbsVal = fabs(x[i]);
-		}
-	}
-	for(int i = 0; i<theNumOfSamples; i++)
-	{
-		x[i] = x[i]/maxAbsVal;
 	}
 }

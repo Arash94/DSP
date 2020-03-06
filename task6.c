@@ -18,36 +18,45 @@ void iir_notch(float y[], float x[], float c);
 void sinc_filter(float* h, float c);
 void add_signal(float* signal,float* noise,float* results);
 void noise(float* noise, float c);
-void echoed(float signal[],float output[]);
+void echoed(float signal[], float output[]) ;
 void normalizeArray(float* x);
 
 int main(int argc, char *argv[])
 {
 	//Require 2 arguments: input file and output file
 	//Require 2 arguments: input file and output file
-	if(argc < 2)
+	if (argc < 3)
 	{
-		printf("Not enough arguments \n");
+		printf ("Not enough arguments \n");
 		return -1;
 	}
 
+    SF_INFO sndInfo;
+    SNDFILE *sndFile = sf_open(argv[1], SFM_READ, &sndInfo);
+    if (sndFile == NULL) {
+        fprintf(stderr, "Error reading source file '%s': %s\n", argv[1], sf_strerror(sndFile));
+        return 1;
+    }
 
-	SF_INFO sndInfo;
-	SNDFILE *sndFile = sf_open(argv[1], SFM_READ, &sndInfo);
-
-    
-    SF_INFO sndInfoOut;
+    SF_INFO sndInfoOut = sndInfo;
     sndInfoOut.format = SF_FORMAT_WAV | SF_FORMAT_PCM_16;
     sndInfoOut.channels = 1;
-    sndInfoOut.samplerate = Fs;
-    SNDFILE *sndFileOut = sf_open(argv[2], SFM_WRITE, &sndInfoOut);
+    sndInfoOut.samplerate = sndInfo.samplerate;
+    SNDFILE *sndFileOut = sf_open(argv[2], SFM_WRITE, &sndInfoOut); // output for the echo signal
 
+    // Check format - 16bit PCM
+    if (sndInfo.format != (SF_FORMAT_WAV | SF_FORMAT_PCM_16)) {
+        fprintf(stderr, "Input should be 16bit Wav\n");
+        sf_close(sndFile);
+        return 1;
+    }
 
-	if (sndFile == NULL)
-	{
-		fprintf(stderr, "Error reading source file '%s': %s\n", argv[1], sf_strerror(sndFile));
-		return 1;
-	}
+    // Check channels - mono
+    if (sndInfo.channels != 1) {
+        fprintf(stderr, "Wrong number of channels\n");
+        sf_close(sndFile);
+        return 1;
+    }
 
 	float* hn = malloc(filter_size * sizeof(float));
     float* speech = malloc(theNumOfSamples * sizeof(float));
@@ -57,55 +66,32 @@ int main(int argc, char *argv[])
     float* filtered_sinc = malloc(theNumOfSamples * sizeof(float));
     float* filtered_iir = malloc(theNumOfSamples * sizeof(float));
 
-
 	sf_readf_float(sndFile, speech, theNumOfSamples);
     
 	//TASK 6: Add Echo
-
 	echoed(speech, echo);
-	sf_writef_float(sndFile, echo, theNumOfSamples);
-	sf_write_sync(echo);
-	free(echo);
-
-	
-	// //Taske 7: Filter FIR Notch
-	// noise(noise_signal, wf);
-	// add_signal(speech,noise_signal, noisy_speech);
-	// sinc_filter(hn, wc);
-	// convolve(hn, filtered_sinc,noisy_speech);
-	// normalizeArray(filtered_sinc);
-	// sf_writef_float(sndFile, filtered_sinc, theNumOfSamples);
-	// free(filtered_sinc);
-	//Task 8: Filter using IIR filter 
-	// iir_notch(filtered_iir, noisy_speech, wc);
-	// sf_writef_float(sndFile, filtered_iir, theNumOfSamples);
-	// normalizeArray(filtered_iir);
-	// free(filtered_iir);
-
-	// sf_close(sndFile);
-	// sf_write_sync(sndFile);
-	// sf_close(sndFile);
-
-
+	normalizeArray(echo);
+	sf_write_sync (sndFileOut); // this is the filtered song
+	sf_writef_float(sndFileOut, echo, theNumOfSamples);
+	sf_write_sync(sndFileOut);
+	sf_close(sndFileOut);
 	return 1;
 }
 
-
-void echoed(float signal[], float output[])
-{
-	float init= 0;
-
-	printf("Creating the echoed version of the incoming signal\n");
-
-
-	for(int i = 4000-1; i < theNumOfSamples; i++)
-	{
-		init = output[i-4000+1];
-        output[i] = 0.7*output[i] + 0.3*init;
-	}
-
+void echoed(float signal[], float output[]) 
+{ 
+ float init= 0; 
+ 
+ printf("Creating the echoed version of the incoming signal\n"); 
+ for (int i = 0; i < theNumOfSamples; i++){output[i] = signal[i];} 
+ 
+ for(int i = 4000-1; i < theNumOfSamples; i++) 
+ { 
+  init = output[i-4000+1]; 
+        output[i] = 0.7*output[i] + 0.3*init; 
+ } 
+ 
 }
-
 void add_signal(float* signal,float* noise,float* results)
 {   
     for (int i = 0; i < theNumOfSamples; i++)
